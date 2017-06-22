@@ -7,10 +7,11 @@
         var $form = $('#' + options.modelName + '_form');
 
         locking.lockingFormInstance = new locking.LockingAdminForm($form, {
+            apiURL: options.apiURL,
             appLabel: options.appLabel,
             modelName: options.modelName,
-            objectID: options.objectID,
-            ping: options.ping
+            ping: options.ping,
+            messages: options.messages
         });
     });
 })(window.locking);

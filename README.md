@@ -9,7 +9,7 @@ Prevents users from overwriting each others changes in Django.
 Django Admin Locking is tested in the following environments
 
 * Python (2.7, 3.4)
-* Django (1.6, 1.7, 1.8, 1.9)
+* Django (1.8, 1.9, 1.10)
 
 ## Installation
 
@@ -91,6 +91,10 @@ For an example, look at the [included plugin](locking/static/locking/js/locking.
 ## Compatibility Notes
 
 This app is compatible the popular admin theme [django-grappelli](https://django-grappelli.readthedocs.org/)
+
+## License
+
+This code is licensed under the Simplified BSD License. View the LICENSE file under the root directory for complete license and copyright information.
 
 [build-status-image]: https://api.travis-ci.org/joshmaker/django-admin-locking.svg?branch=master
 [travis]: https://travis-ci.org/joshmaker/django-admin-locking/?branch=master

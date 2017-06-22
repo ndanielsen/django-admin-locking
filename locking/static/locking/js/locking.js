@@ -20,8 +20,11 @@
      *
      * Makes asynchronous calls to lock or unlock an object
      */
-    locking.API = function(opts) {
-        this.init(opts);
+    locking.API = function(apiURL, messages) {
+        this.apiURL = apiURL;
+        this.lockWasTakenByUserText = messages.lockWasTakenByUserText;
+        this.confirmTakeLockText = messages.confirmTakeLockText;
+        this.networkWarningText = messages.networkWarningText;
     };
     locking.ajax = {
         num_pending: 0,
@@ -30,23 +33,9 @@
         }
     };
     $.extend(locking.API.prototype, {
-        defaults: {
-            hostURL: null,
-            apiBaseURL: '/locking/api/lock',
-            appLabel: null,
-            modelName: null,
-            objectID: null
-        },
-        init: function(opts) {
-            opts = $.extend(this.defaults, opts);
-            this.hostURL = $.grep(
-                [opts.hostURL, opts.apiBaseURL, opts.appLabel, opts.modelName, opts.objectID],
-                function(x) { return !!(x); }
-            ).join('/') + '/';
-        },
         ajax: function(opts) {
             var defaults = {
-                url: this.hostURL,
+                url: this.apiURL,
                 async: true,
                 cache: false
             };
@@ -142,16 +131,16 @@
         hasLock: false,
         hasHadLock: false,
         formDisabled: false,
-        connectedToServer: true,
+        numFailedConnections: 0,
+        removeLockOnUnload: true,
         init: function(form, opts) {
             var self = this;
             this.ping = opts.ping;
             this.$form = $(form);
-            this.api = new locking.API({
-                appLabel: opts.appLabel,
-                modelName: opts.modelName,
-                objectID: opts.objectID
-            });
+            this.api = new locking.API(opts.apiURL, opts.messages);
+            this.confirmTakeLockText = opts.messages.confirmTakeLockText;
+            this.networkWarningText = opts.messages.networkWarningText;
+            this.lockWasTakenByUserText = opts.messages.lockWasTakenByUserText;
 
             // Attempt to get a lock
             this.getLock();
@@ -160,12 +149,13 @@
             setInterval(function() { self.getLock(); }, self.ping * 1000);
 
             // Unlock the form when leaving the page
-            $(window).on('beforeunload', function() {
-                if (self.hasLock) {
+            $(window).on('beforeunload submit', function() {
+                if (self.hasLock && self.removeLockOnUnload) {
                     // We have to assure that our unlock request gets
                     // through before the user leaves the page, so it
                     // shouldn't run asynchronously.
                     self.api.unlock({'async': false});
+                    self.hasLock = false;
                 }
             });
         },
@@ -178,21 +168,17 @@
             var self = this;
             this.api.lock({
                 success: function() {
-                    self.connectedToServer = true;
                     self.enableForm();
                 },
                 error: function(XMLHttpRequest) {
                     if (XMLHttpRequest.status < 200 || XMLHttpRequest.status >= 500) {
-                        if (self.hasLock && self.connectedToServer) {
-                            window.alert('Warning! Due to loss of network connectivity ' +
-                                         'or a server error, you may not be able ' +
-                                         'to submit this form.');
-                            self.connectedToServer = false;
+                        if (self.hasLock && self.numFailedConnections == 1) {
+                            window.alert(self.networkWarningText);
                         }
+                        self.numFailedConnections++;
                     } else {
-                        self.connectedToServer = true;
                         if (self.hasLock) {
-                            window.alert('Another user has taken your lock on this form');
+                            window.alert(self.lockWasTakenByUserText);
                         }
                         self.disableForm($.parseJSON(XMLHttpRequest.responseText));
                     }
@@ -258,7 +244,7 @@
         },
 
         takeLock: function() {
-            if (window.confirm('Are you sure you want to remove this lock?')) {
+            if (window.confirm(this.confirmTakeLockText)) {
                 var self = this;
                 this.api.takeLock({
                     success: function() {

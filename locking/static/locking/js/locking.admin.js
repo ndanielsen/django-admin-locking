@@ -12,10 +12,9 @@
      */
     var ChangeListView = function (opts) {
         this.currentUser = opts.currentUser;
-        this.api = new locking.API({
-            appLabel: opts.appLabel,
-            modelName: opts.modelName,
-        });
+        this.api = new locking.API(opts.apiURL, opts.messages);
+        this.lockedByMeText = opts.messages.lockedByMeText;
+        this.lockedByUserText = opts.messages.lockedByUserText;
         this.cookieName = opts.appLabel + opts.modelName + 'unlock';
         this.updateStatus();
         setInterval(this.updateStatus.bind(this), opts.ping * 1000);
@@ -28,14 +27,17 @@
             for (var i = 0; i < data.length; i++) {
                 user = data[i]['locked_by'];
                 if (user['username'] === self.currentUser) {
-                    lockedMessage = "You are currently editing this";
+                    lockedMessage = self.lockedByMeText;
                     lockedClass = "editing";
                 } else {
                     name = user['first_name'] + ' ' + user['last_name'];
                     if (name === ' ') {
                         name = user['username'];
                     }
-                    lockedMessage = 'Locked by ' + name + ' (' + user['email'] + ')';
+                    lockedMessage = self.lockedByUserText + ' ' + name;
+                    if (user['email']){
+                        lockedMessage += ' (' + user['email'] + ')';
+                    }
                     lockedClass = "locked";
                 }
                 $('#locking-' + data[i]['object_id'])
@@ -63,15 +65,28 @@
             this.takeLock();
             locking.cookies.del(cookieName);
         }
+
+        // Don't remove the lock when choosing 'save and continue editing'
+        var self = this;
+        $('input[type=submit][name="_continue"]').click(function() {
+            self.removeLockOnUnload = false;
+        });
+        self.takeLockText = opts.messages.takeLockText;
+        self.formIsLockedByText = opts.messages.formIsLockedByText;
     };
     $.extend(LockingAdminForm.prototype, locking.LockingForm.prototype);
     $.extend(LockingAdminForm.prototype, {
-        warningHtml: '<ul class="messagelist grp-messagelist">' +
+        getWarningHtml: function() {
+            var self = this;
+            return '<ul class="messagelist grp-messagelist">' +
                         '<li class="error grp-error" id="locking-warning">' +
-                            'Form is locked by <span class="locking-locked-by"></span>' +
-                            '<a id="locking-take-lock" class="button grp-button rounded-button" onclick="window.locking.lockingFormInstance.takeLock()">Take over lock</a>' +
+                            self.formIsLockedByText + ' <span class="locking-locked-by"></span>' +
+                            '<a id="locking-take-lock" class="button grp-button rounded-button" onclick="window.locking.lockingFormInstance.takeLock()">' +
+                                self.takeLockText +
+                            '</a>' +
                         '</li>' +
-                     '</ul>',
+                     '</ul>'
+        },
         lockedBy: {
             setUp: function (data) {
                 this.name = data['username'];
@@ -89,7 +104,7 @@
                 $('.deletelink').css({'cursor': 'not-allowed', 'opacity': 0.5}).click(false);
 
                 // Add warning notice to form
-                this.$form.before(this.warningHtml);
+                this.$form.before(this.getWarningHtml());
 
                 // Lookup who has the lock
                 self.lockedBy.setUp(data[0]['locked_by']);

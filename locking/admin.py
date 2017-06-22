@@ -8,6 +8,7 @@ from django.conf import settings
 from django.conf.urls import url
 from django.core.urlresolvers import reverse
 from django.shortcuts import render
+from django.utils.translation import ugettext as _
 
 from .models import Lock
 from .settings import DEFAULT_PING_SECONDS, DEFAULT_SHARE_ADMIN_JQUERY
@@ -16,7 +17,7 @@ __all__ = ('LockingValidationError', 'LockingAdminMixin')
 
 
 class LockingValidationError(forms.ValidationError):
-    msg = 'You cannot {action} this object because it is locked by {name} ({email})'
+    msg = _('You cannot {action} this object because it is locked by {name} ({email})')
 
     def __init__(self, lock, action):
         locked_by = lock.locked_by
@@ -90,7 +91,7 @@ class LockingAdminMixin(object):
         return html.format(obj_id=obj.pk)
 
     is_locked.allow_tags = True
-    is_locked.short_description = 'Lock'
+    is_locked.short_description = _('Lock')
 
     @property
     def locking_admin_form_js_url_name(self):
@@ -116,14 +117,38 @@ class LockingAdminMixin(object):
         ]
         return locking_urls + urls
 
+    def get_api_url(self, object_id):
+        app_label, model_name = self._model_info
+
+        reverse_kwargs = {
+            'app': app_label,
+            'model': model_name,
+        }
+        if object_id is not None:
+            reverse_kwargs['object_id'] = object_id
+
+        return reverse('locking-api', kwargs=reverse_kwargs)
+
     def get_json_options(self, request, object_id=None):
         app_label, model_name = self._model_info
+
         return json.dumps({
             'currentUser': request.user.username,
             'appLabel': app_label,
+            'apiURL': self.get_api_url(object_id),
             'modelName': model_name,
             'ping': getattr(settings, 'LOCKING_PING_SECONDS', DEFAULT_PING_SECONDS),
-            'objectID': object_id,
+            'messages': {
+                'lockedByMeText': _('You are currently editing this'),
+                'lockedByUserText': _('Locked by'),
+                'takeLockText': _('Take over lock'),
+                'formIsLockedByText': _('Form is locked by'),
+                'lockWasTakenByUserText': _('Another user has taken your lock of this form'),
+                'confirmTakeLockText': _('Are you sure you want to remove this lock?'),
+                'networkWarningText': _('Warning! Due to loss of network connectivity '
+                                        'or a server error, you may not be able '
+                                        'to submit this form.'),
+            },
         })
 
     def locking_admin_form_js(self, request, object_id):
@@ -131,7 +156,7 @@ class LockingAdminMixin(object):
         return render(request,
                       'locking/admin_form.js',
                       {'options': self.get_json_options(request, object_id)},
-                      content_type="application/json")
+                      content_type="application/javascript")
 
     def locking_admin_form_js_url(self, object_id):
         """Get the URL for the locking admin form js for a given object_id on this admin"""
@@ -142,7 +167,7 @@ class LockingAdminMixin(object):
         """Render out JS code for locking a form for a given object_id on this admin"""
         return render(request, 'locking/admin_changelist.js',
                       {'options': self.get_json_options(request)},
-                      content_type="application/json")
+                      content_type="application/javascript")
 
     def locking_admin_changelist_js_url(self):
         """Get the URL for the locking admin form js for a given object_id on this admin"""
